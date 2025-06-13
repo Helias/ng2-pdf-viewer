@@ -57,6 +57,7 @@ export declare class PdfViewerComponent implements OnChanges, OnInit, OnDestroy,
     set stickToPage(value: boolean);
     set zoom(value: number);
     get zoom(): number;
+    zoomChange: EventEmitter<number>;
     set zoomScale(value: ZoomScale);
     get zoomScale(): ZoomScale;
     set rotation(value: number);
@@ -67,6 +68,8 @@ export declare class PdfViewerComponent implements OnChanges, OnInit, OnDestroy,
     isWheelZoom: boolean;
     isWheelCtrlZoom: boolean;
     isOptimizeZoom: boolean;
+    set minZoom(value: number);
+    set maxZoom(value: number);
     static getLinkTarget(type: string): any;
     private readonly element;
     private readonly ngZone;
@@ -94,5 +97,5 @@ export declare class PdfViewerComponent implements OnChanges, OnInit, OnDestroy,
     private initialize;
     private setupResizeListener;
     static ɵfac: i0.ɵɵFactoryDeclaration<PdfViewerComponent, never>;
-    static ɵcmp: i0.ɵɵComponentDeclaration<PdfViewerComponent, "pdf-viewer", never, { "src": { "alias": "src"; "required": false; }; "cMapsUrl": { "alias": "c-maps-url"; "required": false; }; "page": { "alias": "page"; "required": false; }; "renderText": { "alias": "render-text"; "required": false; }; "renderTextMode": { "alias": "render-text-mode"; "required": false; }; "originalSize": { "alias": "original-size"; "required": false; }; "showAll": { "alias": "show-all"; "required": false; }; "stickToPage": { "alias": "stick-to-page"; "required": false; }; "zoom": { "alias": "zoom"; "required": false; }; "zoomScale": { "alias": "zoom-scale"; "required": false; }; "rotation": { "alias": "rotation"; "required": false; }; "externalLinkTarget": { "alias": "external-link-target"; "required": false; }; "autoresize": { "alias": "autoresize"; "required": false; }; "fitToPage": { "alias": "fit-to-page"; "required": false; }; "showBorders": { "alias": "show-borders"; "required": false; }; "isWheelZoom": { "alias": "isWheelZoom"; "required": false; }; "isWheelCtrlZoom": { "alias": "isWheelCtrlZoom"; "required": false; }; "isOptimizeZoom": { "alias": "isOptimizeZoom"; "required": false; }; }, { "afterLoadComplete": "after-load-complete"; "pageRendered": "page-rendered"; "pageInitialized": "pages-initialized"; "textLayerRendered": "text-layer-rendered"; "onError": "error"; "onProgress": "on-progress"; "pageChange": "pageChange"; }, never, never, false, never, false>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<PdfViewerComponent, "pdf-viewer", never, { "src": { "alias": "src"; "required": false; }; "cMapsUrl": { "alias": "c-maps-url"; "required": false; }; "page": { "alias": "page"; "required": false; }; "renderText": { "alias": "render-text"; "required": false; }; "renderTextMode": { "alias": "render-text-mode"; "required": false; }; "originalSize": { "alias": "original-size"; "required": false; }; "showAll": { "alias": "show-all"; "required": false; }; "stickToPage": { "alias": "stick-to-page"; "required": false; }; "zoom": { "alias": "zoom"; "required": false; }; "zoomScale": { "alias": "zoom-scale"; "required": false; }; "rotation": { "alias": "rotation"; "required": false; }; "externalLinkTarget": { "alias": "external-link-target"; "required": false; }; "autoresize": { "alias": "autoresize"; "required": false; }; "fitToPage": { "alias": "fit-to-page"; "required": false; }; "showBorders": { "alias": "show-borders"; "required": false; }; "isWheelZoom": { "alias": "isWheelZoom"; "required": false; }; "isWheelCtrlZoom": { "alias": "isWheelCtrlZoom"; "required": false; }; "isOptimizeZoom": { "alias": "isOptimizeZoom"; "required": false; }; "minZoom": { "alias": "minZoom"; "required": false; }; "maxZoom": { "alias": "maxZoom"; "required": false; }; }, { "afterLoadComplete": "after-load-complete"; "pageRendered": "page-rendered"; "pageInitialized": "pages-initialized"; "textLayerRendered": "text-layer-rendered"; "onError": "error"; "onProgress": "on-progress"; "pageChange": "pageChange"; "zoomChange": "zoomChange"; }, never, never, false, never, false>;
 }

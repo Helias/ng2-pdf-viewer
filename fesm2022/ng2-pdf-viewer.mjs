@@ -160,9 +160,13 @@ function isSSR() {
 
 class ZoomService {
     zoomMutex = false;
+    zoom = 1;
+    maxZoom = 0;
+    minZoom = 0;
+    lastDistance = 0;
+    isPinching = false;
     ratioX = 0;
     ratioY = 0;
-    zoom = 1;
     triggerUpdateSize = new BehaviorSubject(undefined);
     initSettings(container, isWheelZoom, isWheelCtrlZoom) {
         container.addEventListener('wheel', (e) => {
@@ -180,34 +184,42 @@ class ZoomService {
         });
         container.addEventListener('touchend', this.onTouchEnd);
     }
+    limitZoom() {
+        if (this.minZoom === 0 && this.maxZoom === 0) {
+            return;
+        }
+        if (this.maxZoom > 0 && this.zoom > this.maxZoom) {
+            this.zoom = this.maxZoom;
+        }
+        if (this.minZoom > 0 && this.zoom < this.minZoom) {
+            this.zoom = this.minZoom;
+        }
+    }
     zoomAtCursor(event) {
         const ZOOM_STEP = 0.1;
         const delta = event.deltaY < 0 ? 1 + ZOOM_STEP : 1 - ZOOM_STEP;
         this.zoom *= delta;
-        this.zoom = Math.max(0.25, Math.min(this.zoom, 5)); // clamp scale
+        this.limitZoom();
         this.triggerUpdateSize.next();
     }
-    lastDistance = 0;
-    isPinching = false;
     onTouchStart = (event) => {
         if (event.touches.length === 2) {
+            event.preventDefault(); // prevent default zoom behavior
             this.isPinching = true;
             this.lastDistance = this.getDistance(event.touches[0], event.touches[1]);
-            event.preventDefault(); // prevent default zoom behavior
         }
     };
     onTouchMove = (event) => {
         if (this.isPinching && event.touches.length === 2) {
+            event.preventDefault(); // prevent scroll or native zoom
             const currentDistance = this.getDistance(event.touches[0], event.touches[1]);
             if (this.lastDistance !== 0) {
                 const scaleChange = currentDistance / this.lastDistance;
-                if (Math.abs(scaleChange - 1) > 0.01) {
-                    this.zoom = Math.min(Math.max(this.zoom * scaleChange, 0.5), 4); // clamp between 0.5 and 4
-                    this.lastDistance = currentDistance;
-                    this.triggerUpdateSize.next();
-                }
+                this.zoom *= scaleChange;
+                this.limitZoom();
+                this.lastDistance = currentDistance;
+                this.triggerUpdateSize.next();
             }
-            event.preventDefault(); // prevent scroll or native zoom
         }
     };
     onTouchEnd = (event) => {
@@ -354,10 +366,12 @@ class PdfViewerComponent {
             return;
         }
         this.zoomService.zoom = value;
+        this.zoomService.limitZoom();
     }
     get zoom() {
         return this.zoomService.zoom;
     }
+    zoomChange = new EventEmitter();
     set zoomScale(value) {
         this._zoomScale = value;
     }
@@ -386,6 +400,14 @@ class PdfViewerComponent {
     isWheelZoom = true;
     isWheelCtrlZoom = true;
     isOptimizeZoom = true;
+    set minZoom(value) {
+        this.zoomService.minZoom = value;
+        this.zoomService.limitZoom();
+    }
+    set maxZoom(value) {
+        this.zoomService.maxZoom = value;
+        this.zoomService.limitZoom();
+    }
     static getLinkTarget(type) {
         switch (type) {
             case 'blank':
@@ -499,7 +521,8 @@ class PdfViewerComponent {
                 // Scale the document when it shouldn't be in original size or doesn't fit into the viewport
                 if (!this._originalSize ||
                     (this._fitToPage &&
-                        viewportWidth > this.pdfViewerContainer?.nativeElement.clientWidth)) {
+                        viewportWidth >
+                            this.pdfViewerContainer?.nativeElement.clientWidth)) {
                     const viewPort = page.getViewport({ scale: 1, rotation });
                     scale = this.getScale(viewPort.width, viewPort.height);
                     stickToPage = !this._stickToPage;
@@ -513,6 +536,7 @@ class PdfViewerComponent {
                 if (this.isOptimizeZoom || this.isWheelZoom) {
                     this.zoomService.restoreScrollPosition(this.pdfViewerContainer?.nativeElement);
                 }
+                this.zoomChange.emit(this.zoomService.zoom);
             },
         });
     }
@@ -749,7 +773,7 @@ class PdfViewerComponent {
         });
     }
     static ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "16.1.0", ngImport: i0, type: PdfViewerComponent, deps: [], target: i0.ɵɵFactoryTarget.Component });
-    static ɵcmp = i0.ɵɵngDeclareComponent({ minVersion: "14.0.0", version: "16.1.0", type: PdfViewerComponent, selector: "pdf-viewer", inputs: { src: "src", cMapsUrl: ["c-maps-url", "cMapsUrl"], page: "page", renderText: ["render-text", "renderText"], renderTextMode: ["render-text-mode", "renderTextMode"], originalSize: ["original-size", "originalSize"], showAll: ["show-all", "showAll"], stickToPage: ["stick-to-page", "stickToPage"], zoom: "zoom", zoomScale: ["zoom-scale", "zoomScale"], rotation: "rotation", externalLinkTarget: ["external-link-target", "externalLinkTarget"], autoresize: "autoresize", fitToPage: ["fit-to-page", "fitToPage"], showBorders: ["show-borders", "showBorders"], isWheelZoom: "isWheelZoom", isWheelCtrlZoom: "isWheelCtrlZoom", isOptimizeZoom: "isOptimizeZoom" }, outputs: { afterLoadComplete: "after-load-complete", pageRendered: "page-rendered", pageInitialized: "pages-initialized", textLayerRendered: "text-layer-rendered", onError: "error", onProgress: "on-progress", pageChange: "pageChange" }, viewQueries: [{ propertyName: "pdfViewerContainer", first: true, predicate: ["pdfViewerContainer"], descendants: true }], usesOnChanges: true, ngImport: i0, template: `
+    static ɵcmp = i0.ɵɵngDeclareComponent({ minVersion: "14.0.0", version: "16.1.0", type: PdfViewerComponent, selector: "pdf-viewer", inputs: { src: "src", cMapsUrl: ["c-maps-url", "cMapsUrl"], page: "page", renderText: ["render-text", "renderText"], renderTextMode: ["render-text-mode", "renderTextMode"], originalSize: ["original-size", "originalSize"], showAll: ["show-all", "showAll"], stickToPage: ["stick-to-page", "stickToPage"], zoom: "zoom", zoomScale: ["zoom-scale", "zoomScale"], rotation: "rotation", externalLinkTarget: ["external-link-target", "externalLinkTarget"], autoresize: "autoresize", fitToPage: ["fit-to-page", "fitToPage"], showBorders: ["show-borders", "showBorders"], isWheelZoom: "isWheelZoom", isWheelCtrlZoom: "isWheelCtrlZoom", isOptimizeZoom: "isOptimizeZoom", minZoom: "minZoom", maxZoom: "maxZoom" }, outputs: { afterLoadComplete: "after-load-complete", pageRendered: "page-rendered", pageInitialized: "pages-initialized", textLayerRendered: "text-layer-rendered", onError: "error", onProgress: "on-progress", pageChange: "pageChange", zoomChange: "zoomChange" }, viewQueries: [{ propertyName: "pdfViewerContainer", first: true, predicate: ["pdfViewerContainer"], descendants: true }], usesOnChanges: true, ngImport: i0, template: `
     <div #pdfViewerContainer class="ng2-pdf-viewer-container">
       <div class="pdfViewer"></div>
     </div>
@@ -809,8 +833,9 @@ i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "16.1.0", ngImpor
                 type: Input,
                 args: ['stick-to-page']
             }], zoom: [{
-                type: Input,
-                args: ['zoom']
+                type: Input
+            }], zoomChange: [{
+                type: Output
             }], zoomScale: [{
                 type: Input,
                 args: ['zoom-scale']
@@ -835,6 +860,12 @@ i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "16.1.0", ngImpor
                 type: Input
             }], isOptimizeZoom: [{
                 type: Input
+            }], minZoom: [{
+                type: Input,
+                args: ['minZoom']
+            }], maxZoom: [{
+                type: Input,
+                args: ['maxZoom']
             }] } });
 
 /**
