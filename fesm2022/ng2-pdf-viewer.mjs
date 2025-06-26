@@ -224,6 +224,7 @@ class ZoomService {
     };
     onTouchEnd = (event) => {
         if (event.touches.length < 2) {
+            event.preventDefault(); // prevent scroll or native zoom
             this.isPinching = false;
             this.lastDistance = 0;
         }
@@ -238,17 +239,20 @@ class ZoomService {
             return;
         }
         this.zoomMutex = true;
-        const el = container;
-        const ratioX = el.scrollLeft / el.scrollWidth;
-        const ratioY = el.scrollTop / el.scrollHeight;
-        this.ratioX = ratioX;
-        this.ratioY = ratioY;
+        const { scrollLeft, scrollTop, scrollWidth, scrollHeight } = container;
+        const { width, height } = container.getBoundingClientRect();
+        const centerX = scrollLeft + width / 2;
+        const centerY = scrollTop + height / 2;
+        this.ratioX = centerX / scrollWidth;
+        this.ratioY = centerY / scrollHeight;
     }
     restoreScrollPosition(container) {
-        const el = container;
         requestAnimationFrame(() => {
-            el.scrollLeft = this.ratioX * el.scrollWidth;
-            el.scrollTop = this.ratioY * el.scrollHeight;
+            const { width, height } = container.getBoundingClientRect();
+            const centerX = this.ratioX * container.scrollWidth;
+            const centerY = this.ratioY * container.scrollHeight;
+            container.scrollLeft = centerX - width / 2;
+            container.scrollTop = centerY - height / 2;
             this.zoomMutex = false;
         });
     }
