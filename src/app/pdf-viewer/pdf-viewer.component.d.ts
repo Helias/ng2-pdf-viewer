@@ -1,10 +1,10 @@
 /**
  * Created by vadimdez on 21/06/16.
  */
-import { ElementRef, EventEmitter, OnChanges, SimpleChanges, OnInit, OnDestroy, AfterViewChecked, AfterViewInit } from '@angular/core';
+import { AfterViewChecked, AfterViewInit, ElementRef, EventEmitter, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import * as PDFJSViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
-import type { PDFSource, PDFProgressData, ZoomScale } from './typings';
 import { PanService } from './services/pan.service';
+import type { PDFProgressData, PDFSource, ZoomScale } from './typings';
 import * as i0 from "@angular/core";
 export declare const enum RenderTextMode {
     DISABLED = 0,
@@ -41,6 +41,7 @@ export declare class PdfViewerComponent implements OnChanges, OnInit, OnDestroy,
     private isInitialized;
     private loadingTask?;
     private destroy$;
+    private updateSizeSub$;
     afterLoadComplete: EventEmitter<import("pdfjs-dist/types/src/display/api").PDFDocumentProxy>;
     pageRendered: EventEmitter<CustomEvent<any>>;
     pageInitialized: EventEmitter<CustomEvent<any>>;
