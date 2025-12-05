@@ -12,6 +12,7 @@ export class ZoomService implements OnDestroy {
   private isPinching = false;
   private ratioX = 0;
   private ratioY = 0;
+  private rafId: number | null = null; // ✅ Add this
 
   readonly triggerUpdateSize$ = new BehaviorSubject<void>(undefined);
 
@@ -127,7 +128,12 @@ export class ZoomService implements OnDestroy {
   }
 
   restoreScrollPosition(container: HTMLElement): void {
-    requestAnimationFrame(() => {
+    // ✅ Cancel any pending animation frame
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+    }
+
+    this.rafId = requestAnimationFrame(() => {
       const { width, height } = container.getBoundingClientRect();
 
       const centerX = this.ratioX * container.scrollWidth;
@@ -137,12 +143,19 @@ export class ZoomService implements OnDestroy {
       container.scrollTop = centerY - height / 2;
 
       this.zoomMutex = false;
+      this.rafId = null; // ✅ Clear the ID
     });
   }
 
   removeListeners(container: HTMLElement): void {
     if (!container) {
       return;
+    }
+
+    // ✅ Cancel pending animation frame
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
     }
 
     if (this.wheelHandler) {
@@ -156,6 +169,12 @@ export class ZoomService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    // ✅ Cancel any pending animation frame
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+
     this.triggerUpdateSize$.complete();
   }
 }

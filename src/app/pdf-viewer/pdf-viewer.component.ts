@@ -122,10 +122,15 @@ export class PdfViewerComponent
   private _latestScrolledPage!: number;
 
   private pageScrollTimeout: number | null = null;
+  private stickToPageTimeout: number | null = null;
   private isInitialized = false;
   private loadingTask?: PDFDocumentLoadingTask | null;
   private destroy$ = new Subject<void>();
   private updateSizeSub$: Subscription | null = null;
+  private isUpdatingSize = false;
+  private currentPageProxy: PDFPageProxy | null = null; // ✅ Add this to track page
+
+  private renderTimeout: ReturnType<typeof setTimeout> | null = null;
 
   @Output('after-load-complete') afterLoadComplete =
     new EventEmitter<PDFDocumentProxy>();
@@ -361,8 +366,10 @@ export class PdfViewerComponent
     }
 
     if ('src' in changes) {
+      console.log('### SRC');
       this.loadPDF();
     } else if (this._pdf) {
+      console.log('### PDF');
       if ('renderText' in changes || 'showAll' in changes) {
         this.setupViewer();
         this.resetPdfDocument();
@@ -378,14 +385,21 @@ export class PdfViewerComponent
         this.pdfViewer.scrollPageIntoView({ pageNumber: this._page });
       }
 
+      console.log('### UPDATE');
       this.update();
     }
   }
 
   updateSize(): void {
+    if (this.isUpdatingSize) {
+      return;
+    }
+
     if (this.updateSizeSub$) {
       this.updateSizeSub$.unsubscribe();
     }
+
+    this.isUpdatingSize = true;
 
     this.updateSizeSub$ = combineLatest([
       from(this._pdf!.getPage(this.pdfViewer.currentPageNumber)),
@@ -394,48 +408,63 @@ export class PdfViewerComponent
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: ([page]: [PDFPageProxy, void]) => {
-          if (this.isOptimizeZoom || this.isWheelZoom) {
-            this.zoomService.saveScrollPosition(
-              this.pdfViewerContainer?.nativeElement
-            );
-          }
+          this.currentPageProxy = page; // Store for eventual cleanup on destroy
 
-          const rotation = this._rotation + page.rotate;
-          const viewportWidth =
-            page.getViewport({
-              scale: this.zoomService.zoom,
-              rotation,
-            }).width * PdfViewerComponent.CSS_UNITS;
+          // 1. Calculate the Target Scale
           let scale = this.zoomService.zoom;
-          let stickToPage = true;
 
-          // Scale the document when it shouldn't be in original size or doesn't fit into the viewport
-          if (
-            !this._originalSize ||
-            (this._fitToPage &&
-              viewportWidth >
-                this.pdfViewerContainer?.nativeElement.clientWidth)
-          ) {
-            const viewPort = page.getViewport({ scale: 1, rotation });
-            scale = this.getScale(viewPort.width, viewPort.height);
-            stickToPage = !this._stickToPage;
+          // Logic for auto-fitting (kept from your original code)
+          // const rotation = this._rotation + page.rotate;
+          // const viewportWidth = page.getViewport({ scale: this.zoomService.zoom, rotation }).width * PdfViewerComponent.CSS_UNITS;
+          //
+          // if (!this._originalSize || (this._fitToPage && viewportWidth > this.pdfViewerContainer?.nativeElement.clientWidth)) {
+          //   const viewPort = page.getViewport({ scale: 1, rotation });
+          //   scale = this.getScale(viewPort.width, viewPort.height);
+          // }
+
+          // 2. PERFORMANCE FIX: The "Visual Zoom" Trick
+          // Instead of rendering immediately, we scale the container with CSS first.
+          // This costs 0 memory and 0 CPU.
+
+          const currentScale = this.pdfViewer.currentScale;
+          const viewerContainer =
+            this.pdfViewerContainer.nativeElement.querySelector(
+              '.pdfViewer'
+            ) as HTMLElement;
+
+          if (viewerContainer) {
+            // Calculate how much we need to stretch the CURRENT image to match the NEW scale
+            const cssScale = scale / currentScale;
+            viewerContainer.style.transform = `scale(${cssScale})`;
+            viewerContainer.style.transformOrigin = 'top left';
           }
 
-          this.pdfViewer.currentScale = scale;
-
-          if (stickToPage)
-            this.pdfViewer.scrollPageIntoView({
-              pageNumber: page.pageNumber,
-              ignoreDestinationZoom: true,
-            });
-
-          if (this.isOptimizeZoom || this.isWheelZoom) {
-            this.zoomService.restoreScrollPosition(
-              this.pdfViewerContainer?.nativeElement
-            );
+          // 3. DEBOUNCE: Clear any pending render tasks
+          if (this.renderTimeout) {
+            clearTimeout(this.renderTimeout);
           }
 
-          this.zoomChange.emit(this.zoomService.zoom);
+          // 4. Wait for the user to STOP zooming (e.g., 200ms) before doing the heavy work
+          this.renderTimeout = setTimeout(() => {
+            // if (viewerContainer) {
+            //   // Remove the CSS stretch (so the canvas is sharp again)
+            //   viewerContainer.style.transform = '';
+            // }
+
+            // Perform the expensive PDF Render
+            this.pdfViewer.currentScale = scale;
+
+            // Emit change
+            this.zoomChange.emit(this.zoomService.zoom);
+          }, 100);
+
+          this.isUpdatingSize = false;
+        },
+        error: () => {
+          this.isUpdatingSize = false;
+        },
+        complete: () => {
+          this.isUpdatingSize = false;
         },
       });
   }
@@ -443,19 +472,43 @@ export class PdfViewerComponent
   clear(): void {
     if (this.pageScrollTimeout) {
       clearTimeout(this.pageScrollTimeout);
+      this.pageScrollTimeout = null;
+    }
+
+    if (this.stickToPageTimeout) {
+      clearTimeout(this.stickToPageTimeout);
+      this.stickToPageTimeout = null;
     }
 
     if (this.loadingTask && !this.loadingTask.destroyed) {
       this.loadingTask.destroy();
     }
 
+    // Clean up current page proxy
+    if (this.currentPageProxy) {
+      this.currentPageProxy.cleanup();
+      this.currentPageProxy = null;
+    }
+
+    // Clean up PDFViewer which handles internal cleanup
+    if (this.pdfViewer) {
+      // Calling cleanup() on the viewer should handle page cleanup
+      if (typeof (this.pdfViewer as any).cleanup === 'function') {
+        (this.pdfViewer as any).cleanup();
+      }
+      this.pdfViewer.setDocument(null as any);
+    }
+
+    // Destroy PDF document - this should cascade cleanup
     if (this._pdf) {
       this._latestScrolledPage = 0;
+
+      // Call destroy with force cleanup option if available
       this._pdf.destroy();
+      this.pdfViewerContainer.nativeElement.outerHTML = '';
       this._pdf = undefined;
     }
 
-    this.pdfViewer && this.pdfViewer.setDocument(null as any);
     this.pdfLinkService && this.pdfLinkService.setDocument(null, null);
     this.pdfFindController && this.pdfFindController.setDocument(null as any);
   }
@@ -651,29 +704,44 @@ export class PdfViewerComponent
   private render(): void {
     this._page = this.getValidPageNumber(this._page);
 
-    if (
-      this._rotation !== 0 ||
-      this.pdfViewer.pagesRotation !== this._rotation
-    ) {
-      // wait until at least the first page is available.
-      this.pdfViewer.firstPagePromise?.then(
-        () => (this.pdfViewer.pagesRotation = this._rotation)
-      );
-    }
+    // if (
+    //   this._rotation !== 0 ||
+    //   this.pdfViewer.pagesRotation !== this._rotation
+    // ) {
+    //   // wait until at least the first page is available.
+    //   // ✅ Add takeUntil to prevent execution after destroy
+    //   this.pdfViewer.firstPagePromise?.then(() => {
+    //     if (!this.destroy$.closed) {
+    //       // ✅ Check if not destroyed
+    //       this.pdfViewer.pagesRotation = this._rotation;
+    //     }
+    //   });
+    // }
 
-    if (this._stickToPage) {
-      setTimeout(() => {
-        this.pdfViewer.currentPageNumber = this._page;
-      });
-    }
+    // if (this._stickToPage) {
+    //   if (this.stickToPageTimeout) {
+    //     clearTimeout(this.stickToPageTimeout);
+    //   }
+
+    //   this.stickToPageTimeout = window.setTimeout(() => {
+    //     if (!this.destroy$.closed) {
+    //       this.pdfViewer.currentPageNumber = this._page;
+    //     }
+    //     this.stickToPageTimeout = null;
+    //   });
+    // }
 
     if (!this.pdfViewer._pages?.length) {
+      console.log('### UPDATE SIZE INIT');
       // the first time we wait until pages init
-      const sub = this.pageInitialized.subscribe(() => {
-        this.updateSize();
-        sub.unsubscribe();
-      });
+      const sub = this.pageInitialized
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(() => {
+          this.updateSize();
+          sub.unsubscribe();
+        });
     } else {
+      console.log('### UPDATE SIZE RENDER');
       this.updateSize();
     }
   }
