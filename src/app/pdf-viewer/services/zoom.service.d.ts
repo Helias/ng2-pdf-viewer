@@ -1,16 +1,18 @@
 import { OnDestroy } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
 import * as i0 from "@angular/core";
 export declare class ZoomService implements OnDestroy {
     private zoomMutex;
-    zoom: number;
+    private _zoom;
     maxZoom: number;
     minZoom: number;
     private lastDistance;
     private isPinching;
     private ratioX;
     private ratioY;
-    readonly triggerUpdateSize$: BehaviorSubject<void>;
+    private triggerUpdateSizeInternal$;
+    triggerUpdateSize$: import("rxjs").Observable<void>;
+    set zoom(value: number);
+    get zoom(): number;
     private wheelHandler;
     initSettings(container: HTMLElement, isWheelZoom: boolean, isWheelCtrlZoom: boolean): void;
     limitZoom(): void;

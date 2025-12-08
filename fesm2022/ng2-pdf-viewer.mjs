@@ -205,14 +205,24 @@ i0.ɵɵngDeclareClassMetadata({ minVersion: "12.0.0", version: "16.1.0", ngImpor
 
 class ZoomService {
     zoomMutex = false;
-    zoom = 1;
+    _zoom = 1;
     maxZoom = 0;
     minZoom = 0;
     lastDistance = 0;
     isPinching = false;
     ratioX = 0;
     ratioY = 0;
-    triggerUpdateSize$ = new BehaviorSubject(undefined);
+    triggerUpdateSizeInternal$ = new BehaviorSubject(undefined);
+    // Debounce to prevent rapid-fire updates during continuous zoom
+    triggerUpdateSize$ = this.triggerUpdateSizeInternal$.pipe(debounceTime(10) // Wait after last zoom before updating
+    );
+    set zoom(value) {
+        this._zoom = value;
+        this.triggerUpdateSizeInternal$.next();
+    }
+    get zoom() {
+        return this._zoom;
+    }
     wheelHandler = null;
     initSettings(container, isWheelZoom, isWheelCtrlZoom) {
         this.removeListeners(container);
@@ -247,7 +257,7 @@ class ZoomService {
         const delta = event.deltaY < 0 ? 1 + ZOOM_STEP : 1 - ZOOM_STEP;
         this.zoom *= delta;
         this.limitZoom();
-        this.triggerUpdateSize$.next();
+        this.triggerUpdateSizeInternal$.next();
     }
     onTouchStart = (event) => {
         if (event.touches.length === 2) {
@@ -265,7 +275,7 @@ class ZoomService {
                 this.zoom *= scaleChange;
                 this.limitZoom();
                 this.lastDistance = currentDistance;
-                this.triggerUpdateSize$.next();
+                this.triggerUpdateSizeInternal$.next();
             }
         }
     };
@@ -316,7 +326,7 @@ class ZoomService {
         container.removeEventListener('touchend', this.onTouchEnd);
     }
     ngOnDestroy() {
-        this.triggerUpdateSize$.complete();
+        this.triggerUpdateSizeInternal$.complete();
     }
     static ɵfac = i0.ɵɵngDeclareFactory({ minVersion: "12.0.0", version: "16.1.0", ngImport: i0, type: ZoomService, deps: [], target: i0.ɵɵFactoryTarget.Injectable });
     static ɵprov = i0.ɵɵngDeclareInjectable({ minVersion: "12.0.0", version: "16.1.0", ngImport: i0, type: ZoomService });
@@ -608,6 +618,7 @@ class PdfViewerComponent {
                 if (this.isOptimizeZoom || this.isWheelZoom) {
                     this.zoomService.restoreScrollPosition(this.pdfViewerContainer?.nativeElement);
                 }
+                page.cleanup();
                 this.zoomChange.emit(this.zoomService.zoom);
             },
         });
